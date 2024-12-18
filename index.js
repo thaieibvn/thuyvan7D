@@ -2,7 +2,7 @@
 const axios = require('axios');
 const express = require('express');
 const app = express();
-const port = 3002;
+const port = process.env.PORT || 80;
 
 app.use(express.static('public'));
 
@@ -89,6 +89,6 @@ async function analyzeSymbol(symbol) {
     };
 }
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running at http://0.0.0.0:${port}`);
 });
