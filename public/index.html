@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crypto Analysis</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        .chart-container { margin-bottom: 20px; }
+        #chartContainer, #deltaPrice, #deltaVolume { height: 400px; }
+        .statistics { 
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .symbol-input {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+        .symbol-input input {
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .symbol-input button {
+            padding: 8px 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .symbol-input button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="symbol-input">
+        <input type="text" id="symbolInput" placeholder="Enter symbol (e.g., BTCUSDT)" value="BTCUSDT">
+        <button onclick="updateSymbol()">Analyze</button>
+    </div>
+
+    <div class="statistics" id="stats"></div>
+    <div class="chart-container">
+        <h2>Candlestick Chart</h2>
+        <div id="chartContainer"></div>
+    </div>
+    <div class="chart-container">
+        <h2>Delta Price</h2>
+        <div id="deltaPrice"></div>
+    </div>
+    <div class="chart-container">
+        <h2>Delta Volume</h2>
+        <div id="deltaVolume"></div>
+    </div>
+
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script>
+        let chart, candleSeries, deltaPriceChart, deltaVolumeChart;
+        let deltaPriceSeries, peakLine, bottomLine, deltaVolumeSeries;
+
+        function initCharts() {
+            // Khởi tạo chart containers
+            if (!chart) {
+                chart = LightweightCharts.createChart(document.getElementById('chartContainer'), {
+                    layout: {
+                        backgroundColor: '#ffffff',
+                        textColor: 'rgba(33, 56, 77, 1)',
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(197, 203, 206, 0.5)' },
+                        horzLines: { color: 'rgba(197, 203, 206, 0.5)' },
+                    },
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Normal,
+                    },
+                    rightPriceScale: {
+                        borderColor: 'rgba(197, 203, 206, 1)',
+                    },
+                    timeScale: {
+                        borderColor: 'rgba(197, 203, 206, 1)',
+                    },
+                });
+                candleSeries = chart.addCandlestickSeries();
+            }
+
+            if (!deltaPriceChart) {
+                deltaPriceChart = LightweightCharts.createChart(document.getElementById('deltaPrice'), {
+                    layout: {
+                        backgroundColor: '#ffffff',
+                        textColor: 'rgba(33, 56, 77, 1)',
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(197, 203, 206, 0.5)' },
+                        horzLines: { color: 'rgba(197, 203, 206, 0.5)' },
+                    },
+                });
+
+                deltaPriceSeries = deltaPriceChart.addLineSeries({
+                    color: 'rgba(4, 111, 232, 1)',
+                    lineWidth: 2,
+                });
+                
+                peakLine = deltaPriceChart.addLineSeries({
+                    color: 'rgba(255, 0, 0, 1)',
+                    lineWidth: 1,
+                    lineStyle: 2,
+                });
+
+                bottomLine = deltaPriceChart.addLineSeries({
+                    color: 'rgba(0, 255, 0, 1)',
+                    lineWidth: 1,
+                    lineStyle: 2,
+                });
+            }
+
+            if (!deltaVolumeChart) {
+                deltaVolumeChart = LightweightCharts.createChart(document.getElementById('deltaVolume'), {
+                    layout: {
+                        backgroundColor: '#ffffff',
+                        textColor: 'rgba(33, 56, 77, 1)',
+                    },
+                    grid: {
+                        vertLines: { color: 'rgba(197, 203, 206, 0.5)' },
+                        horzLines: { color: 'rgba(197, 203, 206, 0.5)' },
+                    },
+                });
+
+                deltaVolumeSeries = deltaVolumeChart.addHistogramSeries({
+                    color: 'rgba(76, 175, 80, 0.5)',
+                });
+            }
+        }
+
+        async function updateSymbol() {
+            const symbol = document.getElementById('symbolInput').value.toUpperCase();
+            try {
+                const response = await fetch(`/api/data/${symbol}`);
+                const data = await response.json();
+
+                // Update candlestick chart
+                candleSeries.setData(data.candleData);
+
+                // Update Delta Price chart
+                deltaPriceSeries.setData(data.deltaData.map(d => ({
+                    time: d.time,
+                    value: d.deltaPrice
+                })));
+
+                peakLine.setData(data.deltaData.map(d => ({
+                    time: d.time,
+                    value: data.stats.peak
+                })));
+
+                bottomLine.setData(data.deltaData.map(d => ({
+                    time: d.time,
+                    value: data.stats.bottom
+                })));
+
+                // Update Delta Volume chart
+                deltaVolumeSeries.setData(data.deltaData.map(d => ({
+                    time: d.time,
+                    value: d.deltaVolume,
+                    color: d.deltaVolume >= 0 ? 'rgba(76, 175, 80, 0.5)' : 'rgba(255, 82, 82, 0.5)'
+                })));
+
+                // Update statistics
+                const statsHtml = `
+                    <h2>Statistics - ${symbol}</h2>
+                    <p>Peak: ${data.stats.peak.toFixed(2)}</p>
+                    <p>Bottom: ${data.stats.bottom.toFixed(2)}</p>
+                    <p>Probability Above Peak: ${(data.stats.probabilityAbovePeak * 100).toFixed(2)}%</p>
+                    <p>Probability Below Bottom: ${(data.stats.probabilityBelowBottom * 100).toFixed(2)}%</p>
+                `;
+                document.getElementById('stats').innerHTML = statsHtml;
+            } catch (error) {
+                alert('Error fetching data: ' + error.message);
+            }
+        }
+
+        // Initialize charts and load default symbol
+        window.onload = function() {
+            initCharts();
+            updateSymbol();
+        };
+    </script>
+</body>
+</html>
